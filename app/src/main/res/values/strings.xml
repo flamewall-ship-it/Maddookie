@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Maddookie</string>
+    <string name="nav_discover">Discover</string>
+    <string name="nav_schedule">Schedule</string>
+    <string name="nav_watchlist">Watchlist</string>
+    <string name="nav_sync">Sync &amp; RPC</string>
+    <string name="nav_turbo">Potato-Turbo</string>
+    <string name="search_placeholder">Search anime, studios, genres…</string>
+    <string name="cd_app_logo">Maddookie emblem</string>
+    <string name="cd_poster">Anime poster artwork</string>
+    <string name="cd_banner">Anime hero banner</string>
+    <string name="cd_play_episode">Play episode</string>
+    <string name="cd_back">Navigate back</string>
+    <string name="cd_discord_art">Maddookie Discord Rich Presence artwork</string>
+    <string name="anilist_oauth_scheme">maddookie://auth</string>
+    <string name="mal_oauth_scheme">maddookie://mal-auth</string>
+</resources>

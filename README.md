@@ -1,24 +1,22 @@
-# Maddookie — Native Android & TV Anime Client (AniList + MyAnimeList Sync)
+# Maddookie — Native Android & TV Anime Client
 
-**Maddookie** (`com.maddookie`) is a fast, ad-free anime streaming and tracking app for Android phones, tablets, and Android TV, built with **Kotlin + Jetpack Compose** and a **Potato-Turbo Low-RAM Engine**.
+**Maddookie** is a fast, ad-free anime discovery, tracking, and streaming app built with **Kotlin + Jetpack Compose**, **Material Design 3**, **Media3 ExoPlayer**, **Room**, and a **Potato-Turbo Low-RAM Engine**.
 
-## Direct APK Download (v1.0.1-maddookie-turbo • versionCode 98)
-- **Download Signed APK (`maddookie.apk`)**: [Google Drive Direct Download](https://drive.google.com/file/d/1Z68Az30FM80VxE_vJmYWcM4Zt0CRMvjN/view?usp=drivesdk)
-- **Package ID**: `com.maddookie` (`minSdkVersion 21`, Android 5.0–15 + Android TV, 4-byte zipaligned, v1 + v2 signed)
+## Features Implemented
+- **Live AniList Catalog & Weekly Airing Schedule**: Powered by AniList's GraphQL API (`https://graphql.anilist.co`) with Trending, Seasonal, Top Rated, live search, genre filtering, and 7-day airing schedule countdowns.
+- **Two-Way AniList, MyAnimeList & Simkl Sync**:
+  - OAuth2 PKCE deep-link flows (`maddookie://auth` and `maddookie://mal-auth`) plus direct AniList personal token verification.
+  - Redirect-free **Simkl Device PIN** authorization (`simkl.com/pin`).
+  - Local Room watchlist & playback persistence (`Watching`, `Plan to Watch`, `Completed`, `On Hold`, `Dropped`) with automatic progress sync at **85% watched**.
+- **Multi-Provider Streaming Engine & Media3 Player**:
+  - Automatic fallback pipeline across **AllAnime**, **AnimePahe**, **Anikoto**, **AnimeKai**, and **KickAssAnime** with **SUB/DUB** switching, **HLS/MP4** playback via Media3 ExoPlayer, and `+85s` OP skip.
+- **Discord Rich Presence Card**: Live activity preview card with custom Maddookie artwork and configurable episode/provider badges.
+- **Potato-Turbo Low-RAM Engine**:
+  - Runtime **RGB_565** bitmap decoding and configurable **12% heap cache cap** in Coil.
+  - Deferred background WebView initialization toggle, zero-blur GPU fast path, and live JVM heap / device RAM telemetry.
+- **Adaptive Mobile, Tablet & TV Layout**: `enableEdgeToEdge()`, `WindowSizeClass` switching between `NavigationBar` and `NavigationRail`, and D-Pad friendly cards.
 
-## Key Features
-- **Two-Way AniList & MyAnimeList (MAL) Sync**: OAuth2 PKCE authentication (`maddookie://auth` & `maddookie://mal-auth`) and redirect-free Simkl Device PIN authentication (`simkl.com/pin`) with automatic progress sync at 85% watched.
-- **Multi-Provider Streaming Engine**: Automatic fallback across **AllAnime**, **AnimePahe**, **Anikoto**, **AnimeKai**, and **KickAssAnime** with SUB/DUB switching and HLS/MP4 playback.
-- **Discord Rich Presence**: Live activity status cards with custom Maddookie artwork.
-- **Potato-Turbo Low-RAM Optimization**: Tuned for instant cold start and zero-jank scrolling on Xiaomi Redmi 14C (Helio G81 Ultra / HyperOS) and constrained Android devices (RGB_565 bitmap decoding, 12% heap cap, deferred background WebView initialization, and zero-blur GPU fast path).
-
-## Building from Source
+## Building
 ```bash
-./gradlew assembleMobileDebug assembleTvDebug
-```
-
-## Pushing Full Local Source Bundle (`maddookie_android_app.zip`)
-Extract `Maddookie-main/` from `maddookie_android_app.zip` and run:
-```bash
-bash push_to_github.sh flamewall-ship-it Maddookie
+gradle :app:assembleDebug
 ```
