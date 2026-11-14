@@ -14,6 +14,7 @@
     <application
         android:name="com.example.MaddookieApp"
         android:allowBackup="true"
+        android:banner="@drawable/tv_banner"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -40,6 +41,12 @@
                 <data
                     android:host="auth"
                     android:scheme="maddookie" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:host="mal-auth"
                     android:scheme="maddookie" />
