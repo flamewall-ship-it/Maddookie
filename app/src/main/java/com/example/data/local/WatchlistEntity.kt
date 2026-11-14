@@ -3,7 +3,9 @@ package com.example.data.local
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.example.data.model.WatchStatus
+import kotlinx.serialization.Serializable
 
+@Serializable
 @Entity(tableName = "watchlist_entries")
 data class WatchlistEntity(
     @PrimaryKey val animeId: Int,
@@ -20,9 +22,6 @@ data class WatchlistEntity(
     val lastDurationMs: Long = 0L,
     val lastAudioMode: String = "SUB",
     val lastProvider: String = "ALLANIME",
-    val syncedToAniList: Boolean = false,
-    val syncedToMal: Boolean = false,
-    val syncedToSimkl: Boolean = false,
     val updatedAtMs: Long = System.currentTimeMillis()
 ) {
     fun statusEnum(): WatchStatus =

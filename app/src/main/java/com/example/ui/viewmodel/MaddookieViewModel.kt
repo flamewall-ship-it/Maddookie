@@ -1,7 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
-import android.content.Context
+import android.content.ContentResolver
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -11,16 +11,17 @@ import com.example.data.local.WatchlistEntity
 import com.example.data.model.AiringEntry
 import com.example.data.model.AnimeMedia
 import com.example.data.model.DiscordRpcConfig
+import com.example.data.model.LocalTrackingSettings
 import com.example.data.model.MemorySnapshot
 import com.example.data.model.PotatoTurboConfig
 import com.example.data.model.ResolvedStream
 import com.example.data.model.StreamAudioMode
 import com.example.data.model.StreamProvider
 import com.example.data.model.StreamResolutionAttempt
-import com.example.data.model.SyncAccountState
 import com.example.data.model.WatchStatus
 import com.example.util.MemoryTelemetry
 import com.example.util.PotatoTurboCoilFactory
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +30,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 sealed interface UiLoadState<out T> {
     data object Loading : UiLoadState<Nothing>
@@ -64,10 +68,14 @@ class MaddookieViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val app = application as MaddookieApp
     private val aniList = app.aniListClient
-    private val authManager = app.trackerAuthManager
     private val streamingEngine = app.streamingEngine
     private val watchlistRepo = app.watchlistRepository
     private val prefs = app.preferences
+
+    private val backupJson = Json {
+        ignoreUnknownKeys = true
+        prettyPrint = true
+    }
 
     private val mediaCache = LinkedHashMap<Int, AnimeMedia>()
 
@@ -83,8 +91,8 @@ class MaddookieViewModel(application: Application) : AndroidViewModel(applicatio
     private val _playerState = MutableStateFlow(PlayerUiState())
     val playerState: StateFlow<PlayerUiState> = _playerState.asStateFlow()
 
-    private val _authBannerMessage = MutableStateFlow<String?>(null)
-    val authBannerMessage: StateFlow<String?> = _authBannerMessage.asStateFlow()
+    private val _statusBannerMessage = MutableStateFlow<String?>(null)
+    val statusBannerMessage: StateFlow<String?> = _statusBannerMessage.asStateFlow()
 
     private val _memorySnapshot = MutableStateFlow(MemoryTelemetry.capture(application))
     val memorySnapshot: StateFlow<MemorySnapshot> = _memorySnapshot.asStateFlow()
@@ -95,8 +103,8 @@ class MaddookieViewModel(application: Application) : AndroidViewModel(applicatio
     val turboConfig: StateFlow<PotatoTurboConfig> = prefs.turboConfig
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PotatoTurboConfig())
 
-    val syncState: StateFlow<SyncAccountState> = prefs.syncState
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SyncAccountState())
+    val trackingSettings: StateFlow<LocalTrackingSettings> = prefs.localTrackingSettings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LocalTrackingSettings())
 
     val discordRpc: StateFlow<DiscordRpcConfig> = prefs.discordRpcConfig
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DiscordRpcConfig())
@@ -125,7 +133,7 @@ class MaddookieViewModel(application: Application) : AndroidViewModel(applicatio
                 }
                 .onFailure { err ->
                     _discoverState.update {
-                        it.copy(loadState = UiLoadState.Error(err.message ?: "Network error loading AniList"))
+                        it.copy(loadState = UiLoadState.Error(err.message ?: "Network error loading catalog"))
                     }
                 }
         }
@@ -202,22 +210,13 @@ class MaddookieViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun updateWatchStatus(media: AnimeMedia, status: WatchStatus) {
         viewModelScope.launch {
-            val updated = watchlistRepo.setWatchStatus(media, status)
-            syncProgressToTrackers(media, updated.watchedEpisodes, status)
+            watchlistRepo.setWatchStatus(media, status)
         }
     }
 
     fun incrementWatchlistEntry(entry: WatchlistEntity) {
         viewModelScope.launch {
-            val updated = watchlistRepo.incrementEpisode(entry)
-            val media = mediaCache[entry.animeId] ?: AnimeMedia(
-                id = entry.animeId,
-                malId = entry.malId,
-                titleRomaji = entry.title,
-                coverUrl = entry.coverUrl,
-                episodes = entry.totalEpisodes
-            )
-            syncProgressToTrackers(media, updated.watchedEpisodes, updated.statusEnum())
+            watchlistRepo.incrementEpisode(entry)
         }
     }
 
@@ -237,7 +236,7 @@ class MaddookieViewModel(application: Application) : AndroidViewModel(applicatio
                 _playerState.update {
                     it.copy(
                         isResolving = false,
-                        errorMessage = "Could not load anime metadata #$animeId from AniList."
+                        errorMessage = "Could not load anime metadata #$animeId."
                     )
                 }
                 return@launch
@@ -256,7 +255,6 @@ class MaddookieViewModel(application: Application) : AndroidViewModel(applicatio
                 synced85ForCurrentEpisode = false
             )
 
-            // Update Discord Rich Presence immediately
             updateDiscordPresence(media, episode, preferredProvider?.displayName ?: "Multi-Provider", audioMode)
 
             val result = streamingEngine.resolveEpisodeStream(
@@ -313,13 +311,13 @@ class MaddookieViewModel(application: Application) : AndroidViewModel(applicatio
         if (durationMs <= 0L) return
         val state = _playerState.value
         val anime = state.anime ?: return
+        val autoTrack = trackingSettings.value.autoTrackAt85Percent
         val ratio = positionMs.toFloat() / durationMs.toFloat()
-        val crossed85 = ratio >= 0.85f && !state.synced85ForCurrentEpisode
+        val crossed85 = autoTrack && ratio >= 0.85f && !state.synced85ForCurrentEpisode
 
         if (crossed85) {
             _playerState.update { it.copy(synced85ForCurrentEpisode = true) }
             viewModelScope.launch {
-                val syncedServices = syncProgressToTrackers(anime, state.episode, WatchStatus.WATCHING)
                 watchlistRepo.recordPlaybackProgress(
                     media = anime,
                     episodeNumber = state.episode,
@@ -327,55 +325,13 @@ class MaddookieViewModel(application: Application) : AndroidViewModel(applicatio
                     durationMs = durationMs,
                     audioMode = state.audioMode.label,
                     providerName = state.resolvedStream?.provider?.name ?: "ALLANIME",
-                    crossed85Percent = true,
-                    syncedAniList = syncedServices.first,
-                    syncedMal = syncedServices.second,
-                    syncedSimkl = syncedServices.third
+                    crossed85Percent = true
                 )
                 _playerState.update {
-                    it.copy(syncStatusBanner = "85% watched • Synced Ep ${state.episode} progress")
+                    it.copy(syncStatusBanner = "85% watched • Saved Ep ${state.episode} locally")
                 }
             }
         }
-    }
-
-    private suspend fun syncProgressToTrackers(
-        media: AnimeMedia,
-        episode: Int,
-        status: WatchStatus
-    ): Triple<Boolean, Boolean, Boolean> {
-        val currentSync = syncState.value
-        if (!currentSync.autoSyncAt85Percent) return Triple(false, false, false)
-
-        var alOk = false
-        var malOk = false
-        var simklOk = false
-
-        if (currentSync.anilistConnected && currentSync.anilistToken.isNotBlank()) {
-            alOk = aniList.saveMediaListProgress(
-                currentSync.anilistToken,
-                media.id,
-                episode,
-                status
-            ).isSuccess
-        }
-        if (currentSync.malConnected && currentSync.malToken.isNotBlank() && media.malId != null) {
-            malOk = authManager.syncMalProgress(
-                currentSync.malToken,
-                media.malId,
-                episode,
-                status
-            ).isSuccess
-        }
-        if (currentSync.simklConnected && currentSync.simklToken.isNotBlank() && currentSync.simklClientId.isNotBlank()) {
-            simklOk = authManager.syncSimklHistory(
-                currentSync.simklClientId,
-                currentSync.simklToken,
-                media.malId,
-                episode
-            ).isSuccess
-        }
-        return Triple(alOk, malOk, simklOk)
     }
 
     private fun updateDiscordPresence(
@@ -398,7 +354,6 @@ class MaddookieViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    // --- Potato-Turbo Settings ---
     fun updateTurboSettings(transform: (PotatoTurboConfig) -> PotatoTurboConfig) {
         viewModelScope.launch {
             prefs.updateTurboConfig(transform)
@@ -414,144 +369,54 @@ class MaddookieViewModel(application: Application) : AndroidViewModel(applicatio
         _memorySnapshot.value = MemoryTelemetry.capture(app)
     }
 
-    // --- Two-Way AniList, MAL OAuth2 PKCE & Simkl Device PIN ---
-    fun saveOAuthClientIds(anilistId: String, malId: String, simklId: String) {
-        viewModelScope.launch {
-            prefs.saveClientIds(anilistId, malId, simklId)
-            _authBannerMessage.value = "OAuth Client IDs saved securely."
-        }
+    fun setAutoTrack85(enabled: Boolean) {
+        viewModelScope.launch { prefs.setAutoTrack85(enabled) }
     }
 
-    fun startAniListOAuth(context: Context) {
-        val clientId = syncState.value.anilistClientId
-        if (clientId.isBlank()) {
-            _authBannerMessage.value = "Enter your AniList OAuth Client ID first (redirect: maddookie://auth)."
-            return
-        }
-        val verifier = authManager.generatePkceVerifier()
+    fun exportWatchlistJson(uri: Uri, contentResolver: ContentResolver) {
         viewModelScope.launch {
-            prefs.savePkceVerifier("anilist", verifier)
-            authManager.launchAniListOAuth(context, clientId, verifier)
-        }
-    }
-
-    fun connectAniListWithToken(token: String) {
-        viewModelScope.launch {
-            authManager.verifyManualAniListToken(token)
-                .onSuccess { username ->
-                    prefs.setAniListSession(true, username, token.trim())
-                    _authBannerMessage.value = "Connected AniList as $username"
+            runCatching {
+                val snapshot = watchlistEntries.value
+                val encoded = backupJson.encodeToString(snapshot)
+                withContext(Dispatchers.IO) {
+                    contentResolver.openOutputStream(uri)?.use { stream ->
+                        stream.write(encoded.toByteArray(Charsets.UTF_8))
+                    } ?: error("Unable to open destination file")
                 }
-                .onFailure { err ->
-                    _authBannerMessage.value = "AniList auth error: ${err.message}"
-                }
-        }
-    }
-
-    fun startMalOAuth(context: Context) {
-        val clientId = syncState.value.malClientId
-        if (clientId.isBlank()) {
-            _authBannerMessage.value = "Enter your MyAnimeList Client ID first (redirect: maddookie://mal-auth)."
-            return
-        }
-        val verifier = authManager.generatePkceVerifier()
-        viewModelScope.launch {
-            prefs.savePkceVerifier("mal", verifier)
-            authManager.launchMalOAuth(context, clientId, verifier)
-        }
-    }
-
-    fun handleOAuthDeepLink(uri: Uri) {
-        viewModelScope.launch {
-            when (uri.host) {
-                "auth" -> {
-                    val tokenFromFragment = uri.fragment
-                        ?.split("&")
-                        ?.firstOrNull { it.startsWith("access_token=") }
-                        ?.substringAfter("access_token=")
-                    val code = uri.getQueryParameter("code")
-                    if (!tokenFromFragment.isNullOrBlank()) {
-                        connectAniListWithToken(tokenFromFragment)
-                    } else if (!code.isNullOrBlank()) {
-                        _authBannerMessage.value = "AniList authorization code received (maddookie://auth). Paste token or exchange via server."
-                    }
-                }
-                "mal-auth" -> {
-                    val code = uri.getQueryParameter("code")
-                    val clientId = syncState.value.malClientId
-                    if (!code.isNullOrBlank() && clientId.isNotBlank()) {
-                        val verifier = prefs.getPkceVerifier("mal")
-                        authManager.exchangeMalCode(clientId, code, verifier)
-                            .onSuccess { (username, token) ->
-                                prefs.setMalSession(true, username, token)
-                                _authBannerMessage.value = "Connected MyAnimeList as $username"
-                            }
-                            .onFailure { err ->
-                                _authBannerMessage.value = "MAL PKCE exchange failed: ${err.message}"
-                            }
-                    }
-                }
+                prefs.setLastBackupAt(System.currentTimeMillis())
+                snapshot.size
+            }.onSuccess { count ->
+                _statusBannerMessage.value = "Exported $count watchlist entries to JSON backup."
+            }.onFailure { err ->
+                _statusBannerMessage.value = "Export failed: ${err.message}"
             }
         }
     }
 
-    fun requestSimklDevicePin() {
-        val clientId = syncState.value.simklClientId
-        if (clientId.isBlank()) {
-            _authBannerMessage.value = "Enter your Simkl Client ID to generate a simkl.com/pin code."
-            return
-        }
+    fun importWatchlistJson(uri: Uri, contentResolver: ContentResolver) {
         viewModelScope.launch {
-            authManager.requestSimklPin(clientId)
-                .onSuccess { challenge ->
-                    val expiresAt = System.currentTimeMillis() + challenge.expiresInSeconds * 1000L
-                    prefs.setSimklPinState(challenge.userCode, expiresAt)
-                    _authBannerMessage.value = "Enter PIN ${challenge.userCode} at simkl.com/pin"
+            runCatching {
+                val raw = withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use {
+                        it.readText()
+                    } ?: error("Unable to read backup file")
                 }
-                .onFailure { err ->
-                    _authBannerMessage.value = "Simkl PIN error: ${err.message}"
-                }
-        }
-    }
-
-    fun verifySimklPinNow() {
-        val state = syncState.value
-        if (state.simklClientId.isBlank() || state.simklUserCode.isBlank()) return
-        viewModelScope.launch {
-            authManager.pollSimklPin(state.simklClientId, state.simklUserCode)
-                .onSuccess { token ->
-                    if (!token.isNullOrBlank()) {
-                        prefs.setSimklSession(true, token)
-                        _authBannerMessage.value = "Simkl Device PIN authorized!"
-                    } else {
-                        _authBannerMessage.value = "PIN ${state.simklUserCode} still awaiting authorization at simkl.com/pin."
-                    }
-                }
-                .onFailure { err ->
-                    _authBannerMessage.value = "Simkl poll error: ${err.message}"
-                }
-        }
-    }
-
-    fun disconnectTracker(service: String) {
-        viewModelScope.launch {
-            when (service) {
-                "anilist" -> prefs.setAniListSession(false, "", "")
-                "mal" -> prefs.setMalSession(false, "", "")
-                "simkl" -> prefs.setSimklSession(false, "")
+                val parsed = backupJson.decodeFromString<List<WatchlistEntity>>(raw)
+                watchlistRepo.importAll(parsed)
+                parsed.size
+            }.onSuccess { count ->
+                _statusBannerMessage.value = "Imported $count entries into local Room watchlist."
+            }.onFailure { err ->
+                _statusBannerMessage.value = "Import failed: ${err.message}"
             }
         }
-    }
-
-    fun setAutoSync85(enabled: Boolean) {
-        viewModelScope.launch { prefs.setAutoSync85(enabled) }
     }
 
     fun updateDiscordRpc(transform: (DiscordRpcConfig) -> DiscordRpcConfig) {
         viewModelScope.launch { prefs.updateDiscordRpc(transform) }
     }
 
-    fun clearAuthBanner() {
-        _authBannerMessage.value = null
+    fun clearStatusBanner() {
+        _statusBannerMessage.value = null
     }
 }

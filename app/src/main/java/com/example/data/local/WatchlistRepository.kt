@@ -55,10 +55,7 @@ class WatchlistRepository(private val dao: WatchlistDao) {
         durationMs: Long,
         audioMode: String,
         providerName: String,
-        crossed85Percent: Boolean,
-        syncedAniList: Boolean,
-        syncedMal: Boolean,
-        syncedSimkl: Boolean
+        crossed85Percent: Boolean
     ): WatchlistEntity {
         val existing = dao.getById(media.id)
         val currentWatched = existing?.watchedEpisodes ?: 0
@@ -89,9 +86,6 @@ class WatchlistRepository(private val dao: WatchlistDao) {
             lastDurationMs = durationMs,
             lastAudioMode = audioMode,
             lastProvider = providerName,
-            syncedToAniList = existing?.syncedToAniList == true || syncedAniList,
-            syncedToMal = existing?.syncedToMal == true || syncedMal,
-            syncedToSimkl = existing?.syncedToSimkl == true || syncedSimkl,
             updatedAtMs = System.currentTimeMillis()
         )
         dao.upsert(entity)
@@ -118,6 +112,10 @@ class WatchlistRepository(private val dao: WatchlistDao) {
         )
         dao.upsert(updated)
         return updated
+    }
+
+    suspend fun importAll(entries: List<WatchlistEntity>) {
+        dao.upsertAll(entries)
     }
 
     suspend fun remove(animeId: Int) {

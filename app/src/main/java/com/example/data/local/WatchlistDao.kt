@@ -20,6 +20,9 @@ interface WatchlistDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: WatchlistEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(entries: List<WatchlistEntity>)
+
     @Query("DELETE FROM watchlist_entries WHERE animeId = :animeId")
     suspend fun deleteById(animeId: Int)
 }

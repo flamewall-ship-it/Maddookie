@@ -9,10 +9,10 @@ import com.example.data.local.WatchlistRepository
 import com.example.data.model.PotatoTurboConfig
 import com.example.data.remote.AniListClient
 import com.example.data.remote.MultiProviderStreamingEngine
-import com.example.data.remote.TrackerAuthManager
 import com.example.util.PotatoTurboCoilFactory
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import okhttp3.ConnectionSpec
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -20,6 +20,7 @@ class MaddookieApp : Application(), ImageLoaderFactory {
 
     val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS, ConnectionSpec.COMPATIBLE_TLS))
             .connectTimeout(12, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .followRedirects(true)
@@ -40,10 +41,6 @@ class MaddookieApp : Application(), ImageLoaderFactory {
 
     val aniListClient: AniListClient by lazy {
         AniListClient(okHttpClient)
-    }
-
-    val trackerAuthManager: TrackerAuthManager by lazy {
-        TrackerAuthManager(okHttpClient, aniListClient)
     }
 
     val streamingEngine: MultiProviderStreamingEngine by lazy {

@@ -10,10 +10,9 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.data.model.DiscordRpcConfig
+import com.example.data.model.LocalTrackingSettings
 import com.example.data.model.PotatoTurboConfig
-import com.example.data.model.SyncAccountState
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.maddookieDataStore: DataStore<Preferences> by preferencesDataStore(
@@ -29,25 +28,8 @@ class MaddookiePreferences(private val context: Context) {
         val TURBO_ZERO_BLUR = booleanPreferencesKey("turbo_zero_blur")
         val DARK_THEME = booleanPreferencesKey("dark_theme")
 
-        val ANILIST_CONNECTED = booleanPreferencesKey("anilist_connected")
-        val ANILIST_USER = stringPreferencesKey("anilist_user")
-        val ANILIST_TOKEN = stringPreferencesKey("anilist_token")
-        val ANILIST_CLIENT_ID = stringPreferencesKey("anilist_client_id")
-        val ANILIST_PKCE_VERIFIER = stringPreferencesKey("anilist_pkce_verifier")
-
-        val MAL_CONNECTED = booleanPreferencesKey("mal_connected")
-        val MAL_USER = stringPreferencesKey("mal_user")
-        val MAL_TOKEN = stringPreferencesKey("mal_token")
-        val MAL_CLIENT_ID = stringPreferencesKey("mal_client_id")
-        val MAL_PKCE_VERIFIER = stringPreferencesKey("mal_pkce_verifier")
-
-        val SIMKL_CONNECTED = booleanPreferencesKey("simkl_connected")
-        val SIMKL_CLIENT_ID = stringPreferencesKey("simkl_client_id")
-        val SIMKL_USER_CODE = stringPreferencesKey("simkl_user_code")
-        val SIMKL_PIN_EXPIRES = longPreferencesKey("simkl_pin_expires")
-        val SIMKL_TOKEN = stringPreferencesKey("simkl_token")
-
-        val AUTO_SYNC_85 = booleanPreferencesKey("auto_sync_85")
+        val AUTO_TRACK_85 = booleanPreferencesKey("auto_track_85")
+        val LAST_BACKUP_AT = longPreferencesKey("last_backup_at")
 
         val RPC_ENABLED = booleanPreferencesKey("rpc_enabled")
         val RPC_SHOW_EP = booleanPreferencesKey("rpc_show_ep")
@@ -72,22 +54,10 @@ class MaddookiePreferences(private val context: Context) {
         )
     }
 
-    val syncState: Flow<SyncAccountState> = context.maddookieDataStore.data.map { prefs ->
-        SyncAccountState(
-            anilistConnected = prefs[Keys.ANILIST_CONNECTED] ?: false,
-            anilistUsername = prefs[Keys.ANILIST_USER] ?: "",
-            anilistToken = prefs[Keys.ANILIST_TOKEN] ?: "",
-            anilistClientId = prefs[Keys.ANILIST_CLIENT_ID] ?: "",
-            malConnected = prefs[Keys.MAL_CONNECTED] ?: false,
-            malUsername = prefs[Keys.MAL_USER] ?: "",
-            malToken = prefs[Keys.MAL_TOKEN] ?: "",
-            malClientId = prefs[Keys.MAL_CLIENT_ID] ?: "",
-            simklConnected = prefs[Keys.SIMKL_CONNECTED] ?: false,
-            simklClientId = prefs[Keys.SIMKL_CLIENT_ID] ?: "",
-            simklUserCode = prefs[Keys.SIMKL_USER_CODE] ?: "",
-            simklPinExpiresAt = prefs[Keys.SIMKL_PIN_EXPIRES] ?: 0L,
-            simklToken = prefs[Keys.SIMKL_TOKEN] ?: "",
-            autoSyncAt85Percent = prefs[Keys.AUTO_SYNC_85] ?: true
+    val localTrackingSettings: Flow<LocalTrackingSettings> = context.maddookieDataStore.data.map { prefs ->
+        LocalTrackingSettings(
+            autoTrackAt85Percent = prefs[Keys.AUTO_TRACK_85] ?: true,
+            lastBackupAtMs = prefs[Keys.LAST_BACKUP_AT] ?: 0L
         )
     }
 
@@ -126,67 +96,15 @@ class MaddookiePreferences(private val context: Context) {
         }
     }
 
-    suspend fun saveClientIds(anilistClientId: String, malClientId: String, simklClientId: String) {
+    suspend fun setAutoTrack85(enabled: Boolean) {
         context.maddookieDataStore.edit { prefs ->
-            prefs[Keys.ANILIST_CLIENT_ID] = anilistClientId.trim()
-            prefs[Keys.MAL_CLIENT_ID] = malClientId.trim()
-            prefs[Keys.SIMKL_CLIENT_ID] = simklClientId.trim()
+            prefs[Keys.AUTO_TRACK_85] = enabled
         }
     }
 
-    suspend fun savePkceVerifier(provider: String, verifier: String) {
+    suspend fun setLastBackupAt(timestampMs: Long) {
         context.maddookieDataStore.edit { prefs ->
-            if (provider == "anilist") {
-                prefs[Keys.ANILIST_PKCE_VERIFIER] = verifier
-            } else {
-                prefs[Keys.MAL_PKCE_VERIFIER] = verifier
-            }
-        }
-    }
-
-    suspend fun getPkceVerifier(provider: String): String {
-        return context.maddookieDataStore.data.map { data ->
-            if (provider == "anilist") data[Keys.ANILIST_PKCE_VERIFIER] ?: ""
-            else data[Keys.MAL_PKCE_VERIFIER] ?: ""
-        }.first()
-    }
-
-    suspend fun setAniListSession(connected: Boolean, username: String, token: String) {
-        context.maddookieDataStore.edit { prefs ->
-            prefs[Keys.ANILIST_CONNECTED] = connected
-            prefs[Keys.ANILIST_USER] = username
-            prefs[Keys.ANILIST_TOKEN] = token
-        }
-    }
-
-    suspend fun setMalSession(connected: Boolean, username: String, token: String) {
-        context.maddookieDataStore.edit { prefs ->
-            prefs[Keys.MAL_CONNECTED] = connected
-            prefs[Keys.MAL_USER] = username
-            prefs[Keys.MAL_TOKEN] = token
-        }
-    }
-
-    suspend fun setSimklPinState(userCode: String, expiresAt: Long) {
-        context.maddookieDataStore.edit { prefs ->
-            prefs[Keys.SIMKL_USER_CODE] = userCode
-            prefs[Keys.SIMKL_PIN_EXPIRES] = expiresAt
-        }
-    }
-
-    suspend fun setSimklSession(connected: Boolean, token: String) {
-        context.maddookieDataStore.edit { prefs ->
-            prefs[Keys.SIMKL_CONNECTED] = connected
-            prefs[Keys.SIMKL_TOKEN] = token
-            if (connected) {
-                prefs[Keys.SIMKL_USER_CODE] = ""
-            }
-        }
-    }
-
-    suspend fun setAutoSync85(enabled: Boolean) {
-        context.maddookieDataStore.edit { prefs ->
-            prefs[Keys.AUTO_SYNC_85] = enabled
+            prefs[Keys.LAST_BACKUP_AT] = timestampMs
         }
     }
 

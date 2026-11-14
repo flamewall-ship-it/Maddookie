@@ -107,7 +107,7 @@ fun DiscoverScreen(
                             color = MaterialTheme.colorScheme.onBackground
                         )
                         Text(
-                            text = "AniList + MAL + Multi-Provider",
+                            text = "Keyless Catalog • Local Watchlist",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

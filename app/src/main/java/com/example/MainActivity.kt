@@ -1,10 +1,11 @@
 package com.example
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -18,12 +19,12 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Bookmarks
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Explore
-import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -41,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -86,8 +88,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        intent?.data?.let { viewModel.handleOAuthDeepLink(it) }
-
         setContent {
             val windowSizeClass = calculateWindowSizeClass(this)
             val turboConfig by viewModel.turboConfig.collectAsStateWithLifecycle()
@@ -103,11 +103,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        intent.data?.let { viewModel.handleOAuthDeepLink(it) }
-    }
 }
 
 @Composable
@@ -118,17 +113,34 @@ private fun MaddookieShell(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDest = backStackEntry?.destination
+    val context = LocalContext.current
 
     val discoverState by viewModel.discoverState.collectAsStateWithLifecycle()
     val scheduleState by viewModel.scheduleState.collectAsStateWithLifecycle()
     val watchlistEntries by viewModel.watchlistEntries.collectAsStateWithLifecycle()
     val detailState by viewModel.detailState.collectAsStateWithLifecycle()
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
-    val syncState by viewModel.syncState.collectAsStateWithLifecycle()
+    val trackingSettings by viewModel.trackingSettings.collectAsStateWithLifecycle()
     val discordRpc by viewModel.discordRpc.collectAsStateWithLifecycle()
     val turboConfig by viewModel.turboConfig.collectAsStateWithLifecycle()
     val memorySnapshot by viewModel.memorySnapshot.collectAsStateWithLifecycle()
-    val authBanner by viewModel.authBannerMessage.collectAsStateWithLifecycle()
+    val statusBanner by viewModel.statusBannerMessage.collectAsStateWithLifecycle()
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.exportWatchlistJson(uri, context.contentResolver)
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.importWatchlistJson(uri, context.contentResolver)
+        }
+    }
 
     val destinations = listOf(
         TopLevelDestination(
@@ -155,8 +167,8 @@ private fun MaddookieShell(
         TopLevelDestination(
             route = SyncRpcRoute,
             labelRes = R.string.nav_sync,
-            selectedIcon = Icons.Filled.Sync,
-            unselectedIcon = Icons.Outlined.Sync,
+            selectedIcon = Icons.Filled.Tune,
+            unselectedIcon = Icons.Outlined.Tune,
             testTag = "nav_sync"
         ),
         TopLevelDestination(
@@ -303,21 +315,20 @@ private fun MaddookieShell(
                     }
 
                     composable<SyncRpcRoute> {
-                        val activityContext = androidx.compose.ui.platform.LocalContext.current
                         SyncRpcScreen(
-                            syncState = syncState,
+                            trackingSettings = trackingSettings,
+                            watchlistEntries = watchlistEntries,
                             discordRpc = discordRpc,
-                            authBanner = authBanner,
-                            onSaveClientIds = viewModel::saveOAuthClientIds,
-                            onStartAniListOAuth = { viewModel.startAniListOAuth(activityContext) },
-                            onConnectAniListToken = viewModel::connectAniListWithToken,
-                            onStartMalOAuth = { viewModel.startMalOAuth(activityContext) },
-                            onRequestSimklPin = viewModel::requestSimklDevicePin,
-                            onVerifySimklPin = viewModel::verifySimklPinNow,
-                            onDisconnect = viewModel::disconnectTracker,
-                            onToggleAutoSync85 = viewModel::setAutoSync85,
+                            statusBanner = statusBanner,
+                            onToggleAutoTrack85 = viewModel::setAutoTrack85,
+                            onExportJsonClick = {
+                                exportLauncher.launch("maddookie_watchlist_backup.json")
+                            },
+                            onImportJsonClick = {
+                                importLauncher.launch(arrayOf("application/json", "text/plain"))
+                            },
                             onUpdateDiscordRpc = viewModel::updateDiscordRpc,
-                            onDismissBanner = viewModel::clearAuthBanner
+                            onDismissBanner = viewModel::clearStatusBanner
                         )
                     }
 

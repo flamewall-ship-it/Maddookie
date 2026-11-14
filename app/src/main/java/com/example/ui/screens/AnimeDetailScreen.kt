@@ -296,7 +296,7 @@ fun AnimeDetailScreen(
                         }
 
                         Text(
-                            text = "Track Status (Auto-syncs to AniList / MAL / Simkl)",
+                            text = "Local Watchlist Status (On-Device)",
                             style = MaterialTheme.typography.titleSmall
                         )
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

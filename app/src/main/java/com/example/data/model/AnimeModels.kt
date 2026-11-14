@@ -2,12 +2,12 @@ package com.example.data.model
 
 import kotlinx.serialization.Serializable
 
-enum class WatchStatus(val label: String, val anilistValue: String, val malValue: String) {
-    WATCHING("Watching", "CURRENT", "watching"),
-    PLAN_TO_WATCH("Plan to Watch", "PLANNING", "plan_to_watch"),
-    COMPLETED("Completed", "COMPLETED", "completed"),
-    ON_HOLD("On Hold", "PAUSED", "on_hold"),
-    DROPPED("Dropped", "DROPPED", "dropped")
+enum class WatchStatus(val label: String) {
+    WATCHING("Watching"),
+    PLAN_TO_WATCH("Plan to Watch"),
+    COMPLETED("Completed"),
+    ON_HOLD("On Hold"),
+    DROPPED("Dropped")
 }
 
 enum class StreamProvider(val displayName: String, val baseUrl: String) {
@@ -97,22 +97,9 @@ data class PotatoTurboConfig(
     val darkTheme: Boolean = true
 )
 
-data class SyncAccountState(
-    val anilistConnected: Boolean = false,
-    val anilistUsername: String = "",
-    val anilistToken: String = "",
-    val anilistClientId: String = "",
-    val malConnected: Boolean = false,
-    val malUsername: String = "",
-    val malToken: String = "",
-    val malClientId: String = "",
-    val simklConnected: Boolean = false,
-    val simklClientId: String = "",
-    val simklUserCode: String = "",
-    val simklVerificationUrl: String = "https://simkl.com/pin",
-    val simklPinExpiresAt: Long = 0L,
-    val simklToken: String = "",
-    val autoSyncAt85Percent: Boolean = true
+data class LocalTrackingSettings(
+    val autoTrackAt85Percent: Boolean = true,
+    val lastBackupAtMs: Long = 0L
 )
 
 data class DiscordRpcConfig(

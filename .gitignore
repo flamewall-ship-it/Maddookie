@@ -1,0 +1,23 @@
+# Secrets & local environment (NEVER commit .env or keystores)
+.env
+.env.local
+local.properties
+*.keystore
+!debug.keystore
+*.jks
+*.p12
+*.pem
+google-services.json
+
+# Build outputs & Gradle cache
+.gradle/
+build/
+app/build/
+.build-outputs/
+*.apk
+*.aab
+
+# IDE
+.idea/
+*.iml
+.DS_Store

@@ -3,7 +3,6 @@ package com.example.data.remote
 import com.example.data.model.AiringEntry
 import com.example.data.model.AnimeMedia
 import com.example.data.model.NextAiringInfo
-import com.example.data.model.WatchStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -208,45 +207,9 @@ class AniListClient(private val client: OkHttpClient) {
         }
     }
 
-    suspend fun fetchViewerUsername(accessToken: String): Result<String> = withContext(Dispatchers.IO) {
-        val gql = """
-            query {
-              Viewer { id name }
-            }
-        """.trimIndent()
-        executeGraphQl(gql, accessToken = accessToken).mapCatching { data ->
-            data["Viewer"]?.jsonObject?.get("name")?.jsonPrimitive?.content
-                ?: throw IllegalStateException("Unable to read AniList Viewer profile")
-        }
-    }
-
-    suspend fun saveMediaListProgress(
-        accessToken: String,
-        mediaId: Int,
-        progress: Int,
-        status: WatchStatus
-    ): Result<Unit> = withContext(Dispatchers.IO) {
-        val gql = """
-            mutation (${'$'}mediaId: Int, ${'$'}progress: Int, ${'$'}status: MediaListStatus) {
-              SaveMediaListEntry(mediaId: ${'$'}mediaId, progress: ${'$'}progress, status: ${'$'}status) {
-                id
-                progress
-                status
-              }
-            }
-        """.trimIndent()
-        val variables = buildJsonObject {
-            put("mediaId", mediaId)
-            put("progress", progress)
-            put("status", status.anilistValue)
-        }
-        executeGraphQl(gql, variables, accessToken).map { Unit }
-    }
-
     private fun executeGraphQl(
         query: String,
-        variables: JsonObject? = null,
-        accessToken: String? = null
+        variables: JsonObject? = null
     ): Result<JsonObject> {
         return runCatching {
             val payload = buildJsonObject {
@@ -259,10 +222,6 @@ class AniListClient(private val client: OkHttpClient) {
                 .header("Accept", "application/json")
                 .header("Content-Type", "application/json")
                 .header("User-Agent", "Maddookie/1.0.1")
-
-            if (!accessToken.isNullOrBlank()) {
-                reqBuilder.header("Authorization", "Bearer $accessToken")
-            }
 
             client.newCall(reqBuilder.build()).execute().use { response ->
                 val body = response.body?.string().orEmpty()

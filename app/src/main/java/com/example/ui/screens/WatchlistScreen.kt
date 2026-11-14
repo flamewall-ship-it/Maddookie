@@ -49,9 +49,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.data.local.WatchlistEntity
 import com.example.data.model.WatchStatus
-import com.example.ui.theme.AniListCyan
-import com.example.ui.theme.MalBlue
-import com.example.ui.theme.SimklEmerald
+import com.example.ui.theme.TurboLime
 
 @Composable
 fun WatchlistScreen(
@@ -201,15 +199,8 @@ fun WatchlistScreen(
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    if (entry.syncedToAniList) {
-                                        SyncTagChip("AniList", AniListCyan)
-                                    }
-                                    if (entry.syncedToMal) {
-                                        SyncTagChip("MAL", MalBlue)
-                                    }
-                                    if (entry.syncedToSimkl) {
-                                        SyncTagChip("Simkl", SimklEmerald)
-                                    }
+                                    SyncTagChip(entry.lastAudioMode, MaterialTheme.colorScheme.secondary)
+                                    SyncTagChip(entry.lastProvider, TurboLime)
                                 }
                             }
                             Column(
